@@ -53,4 +53,37 @@ export const login = async (username, password) => {
     });
     return res.json();
 };
+export const fetchTSBReports = async (month = '') => {
+    const query = month ? `?month=${encodeURIComponent(month)}` : '';
+    const res = await fetch(`${API_BASE}/tsb/reports${query}`, {
+        headers: getAuthHeaders()
+    });
+    return res.json();
+};
+
+export const fetchTSBStock = async () => {
+    const res = await fetch(`${API_BASE}/tsb/stock`, {
+        headers: getAuthHeaders()
+    });
+    return res.json();
+};
+
+export const fetchUsers = async () => {
+    const res = await fetch(`${API_BASE}/users`, {
+        headers: getAuthHeaders()
+    });
+    return res.json();
+};
+
+export const updateUserEmail = async (userId, email) => {
+    const res = await fetch(`${API_BASE}/users`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders()
+        },
+        body: JSON.stringify({ user_id: userId, email })
+    });
+    return res.json();
+};
 

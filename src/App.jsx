@@ -7,9 +7,13 @@ import SearchPanel from './components/dashboard/SearchPanel';
 import OrderSummary from './components/dashboard/OrderSummary';
 import OrderLines from './components/dashboard/OrderLines';
 import InvoiceForm from './components/dashboard/InvoiceForm';
+import TSBReports from './components/dashboard/TSBReports';
 import Toast from './components/ui/Toast';
 import Login from './components/auth/Login';
 import Modal from './components/ui/Modal';
+import MainMenuView from './components/dashboard/MainMenuView';
+import TSBStock from './components/dashboard/TSBStock';
+import UserEmailManager from './components/dashboard/UserEmailManager';
 
 
 export default function App() {
@@ -20,6 +24,8 @@ export default function App() {
     return savedUser ? JSON.parse(savedUser) : null;
   });
 
+
+  const [view, setView] = useState('home'); // 'home', 'billing', 'reports', or 'stock'
   const [query, setQuery] = useState('');
   const [order, setOrder] = useState(null);
   const [lines, setLines] = useState([]);
@@ -27,14 +33,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-
-
-  // Form state
-  const [serial, setSerial] = useState('');
-  const [correlative, setCorrelative] = useState('');
-  const [recordType, setRecordType] = useState('goods');
-  const [invoiceDate, setInvoiceDate] = useState('');
-  const [paymentTermId, setPaymentTermId] = useState('');
+  // ... (rest of the state and handlers remain the same)
 
   useEffect(() => {
     if (user) {
@@ -167,54 +166,65 @@ export default function App() {
           selectedCount={selectedLines.length}
           selectedTotal={total}
           onOpenInvoice={() => setIsModalOpen(true)}
+          currentView={view}
+          setView={setView}
         />
 
-
-        <SearchPanel
-
-          query={query}
-          setQuery={setQuery}
-          handleSearch={handleSearch}
-          loading={loading}
-        />
-
-        {loading && !order && (
-          <div className="flex justify-center p-12">
-            <div className="animate-spin w-8 h-8 border-4 border-blue-600/30 border-t-blue-600 rounded-full"></div>
-          </div>
-        )}
-
-        {order && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <OrderSummary order={order} lines={lines} />
-
-            <OrderLines
-              lines={lines}
-              toggleAll={toggleAll}
-              toggleLine={toggleLine}
-              updateQty={updateQty}
+        {view === 'home' ? (
+          <MainMenuView onSelectView={setView} />
+        ) : view === 'reports' ? (
+          <TSBReports showToast={showToast} />
+        ) : view === 'stock' ? (
+          <TSBStock showToast={showToast} />
+        ) : view === 'users' ? (
+          <UserEmailManager showToast={showToast} />
+        ) : (
+          <>
+            <SearchPanel
+              query={query}
+              setQuery={setQuery}
+              handleSearch={handleSearch}
+              loading={loading}
             />
 
-            <Modal 
-              isOpen={isModalOpen} 
-              onClose={() => setIsModalOpen(false)}
-              title="Detalles de la Factura"
-            >
-              <InvoiceForm
-                serial={serial} setSerial={setSerial}
-                correlative={correlative} setCorrelative={setCorrelative}
-                recordType={recordType} setRecordType={setRecordType}
-                invoiceDate={invoiceDate} setInvoiceDate={setInvoiceDate}
-                paymentTermId={paymentTermId} setPaymentTermId={setPaymentTermId}
-                paymentTerms={paymentTerms}
-                selectedLines={selectedLines}
-                total={total}
-                loading={loading}
-                handleCreateInvoice={handleCreateInvoice}
-              />
-            </Modal>
-          </div>
+            {loading && !order && (
+              <div className="flex justify-center p-12">
+                <div className="animate-spin w-8 h-8 border-4 border-blue-600/30 border-t-blue-600 rounded-full"></div>
+              </div>
+            )}
 
+            {order && (
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <OrderSummary order={order} lines={lines} />
+
+                <OrderLines
+                  lines={lines}
+                  toggleAll={toggleAll}
+                  toggleLine={toggleLine}
+                  updateQty={updateQty}
+                />
+
+                <Modal 
+                  isOpen={isModalOpen} 
+                  onClose={() => setIsModalOpen(false)}
+                  title="Detalles de la Factura"
+                >
+                  <InvoiceForm
+                    serial={serial} setSerial={setSerial}
+                    correlative={correlative} setCorrelative={setCorrelative}
+                    recordType={recordType} setRecordType={setRecordType}
+                    invoiceDate={invoiceDate} setInvoiceDate={setInvoiceDate}
+                    paymentTermId={paymentTermId} setPaymentTermId={setPaymentTermId}
+                    paymentTerms={paymentTerms}
+                    selectedLines={selectedLines}
+                    total={total}
+                    loading={loading}
+                    handleCreateInvoice={handleCreateInvoice}
+                  />
+                </Modal>
+              </div>
+            )}
+          </>
         )}
       </div>
 
