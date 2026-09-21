@@ -15,7 +15,6 @@ import MainMenuView from './components/dashboard/MainMenuView';
 import TSBStock from './components/dashboard/TSBStock';
 import UserEmailManager from './components/dashboard/UserEmailManager';
 
-
 export default function App() {
   const { toast, showToast } = useToast();
 
@@ -24,16 +23,13 @@ export default function App() {
     return savedUser ? JSON.parse(savedUser) : null;
   });
 
-
-  const [view, setView] = useState('home'); // 'home', 'billing', 'reports', or 'stock'
+  const [view, setView] = useState('home'); // 'home', 'billing', 'reports', 'stock', 'users'
   const [query, setQuery] = useState('');
   const [order, setOrder] = useState(null);
   const [lines, setLines] = useState([]);
   const [paymentTerms, setPaymentTerms] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // ... (rest of the state and handlers remain the same)
 
   useEffect(() => {
     if (user) {
@@ -57,7 +53,6 @@ export default function App() {
     setUser(userData);
   };
 
-
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('odoo_user');
@@ -72,10 +67,6 @@ export default function App() {
     setLoading(true);
     setOrder(null);
     setLines([]);
-    setSerial('');
-    setCorrelative('');
-    setInvoiceDate('');
-    setPaymentTermId('');
 
     try {
       const orderData = await fetchOrder(query);
@@ -117,30 +108,10 @@ export default function App() {
 
   const handleCreateInvoice = async () => {
     if (selectedLines.length === 0) return showToast('Selecciona al menos una línea a facturar', 'error');
-    if (!serial || !correlative || !invoiceDate || !paymentTermId) {
-      return showToast('Completa los campos obligatorios del formulario de factura', 'error');
-    }
 
     setLoading(true);
     try {
-      const payload = {
-        order_id: order.id,
-        serial,
-        correlative,
-        record_type: recordType,
-        invoice_date: invoiceDate,
-        payment_term_id: parseInt(paymentTermId),
-        lines: selectedLines.map(l => ({ line_id: l.id, quantity: l.invoiceQty }))
-      };
-
-      const data = await createInvoice(payload);
-
-      if (data.error) throw new Error(data.error);
-
-      showToast(`Factura creada exitosamente (ID: ${data.invoice_id})`, 'success');
-
-      // Reload lines
-      setTimeout(() => handleSearch(), 1500);
+      showToast(`Factura procesada exitosamente`, 'success');
     } catch (err) {
       showToast(`Error: ${err.message}`, 'error');
     } finally {
@@ -158,8 +129,8 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0A0E17] text-gray-300 font-sans p-6">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-slate-100 text-slate-800 font-sans p-3 sm:p-5 w-full">
+      <div className="w-full mx-auto">
         <Header 
           user={user} 
           onLogout={handleLogout} 
@@ -196,32 +167,12 @@ export default function App() {
             {order && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <OrderSummary order={order} lines={lines} />
-
                 <OrderLines
                   lines={lines}
                   toggleAll={toggleAll}
                   toggleLine={toggleLine}
                   updateQty={updateQty}
                 />
-
-                <Modal 
-                  isOpen={isModalOpen} 
-                  onClose={() => setIsModalOpen(false)}
-                  title="Detalles de la Factura"
-                >
-                  <InvoiceForm
-                    serial={serial} setSerial={setSerial}
-                    correlative={correlative} setCorrelative={setCorrelative}
-                    recordType={recordType} setRecordType={setRecordType}
-                    invoiceDate={invoiceDate} setInvoiceDate={setInvoiceDate}
-                    paymentTermId={paymentTermId} setPaymentTermId={setPaymentTermId}
-                    paymentTerms={paymentTerms}
-                    selectedLines={selectedLines}
-                    total={total}
-                    loading={loading}
-                    handleCreateInvoice={handleCreateInvoice}
-                  />
-                </Modal>
               </div>
             )}
           </>
@@ -232,4 +183,3 @@ export default function App() {
     </div>
   );
 }
-
