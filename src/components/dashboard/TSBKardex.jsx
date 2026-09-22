@@ -1,12 +1,21 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { processRawReportsToKardexRows, buildKardexByProduct, SERIES_MAPPING } from '../../utils/kardex';
 
-export default function TSBKardex({ rawReports, loading }) {
+export default function TSBKardex({ rawReports, loading, onFilterChange }) {
   const [selectedProduct, setSelectedProduct] = useState('');
   const [productSearch, setProductSearch] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('ALL');
   const [sortDirection, setSortDirection] = useState('desc');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    if (onFilterChange) {
+      onFilterChange({
+        location: selectedLocation,
+        product: selectedProduct || productSearch
+      });
+    }
+  }, [selectedLocation, selectedProduct, productSearch, onFilterChange]);
 
   // Available Location Options
   const locationOptions = useMemo(() => {

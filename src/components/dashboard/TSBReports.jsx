@@ -126,15 +126,44 @@ export default function TSBReports({ showToast }) {
     }
   };
 
+  const [exporting, setExporting] = useState(false);
+  const [kardexFilters, setKardexFilters] = useState({ location: 'ALL', product: '' });
+
   const handleExportExcel = async () => {
+    setExporting(true);
     try {
       const savedUser = localStorage.getItem('odoo_user');
       if (!savedUser) return;
       const user = JSON.parse(savedUser);
       
       const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080/api';
-      const monthParam = selectedMonth ? `?month=${encodeURIComponent(selectedMonth)}` : '';
-      const response = await fetch(`${API_BASE}/tsb/reports/export${monthParam}`, {
+      const params = new URLSearchParams();
+
+      if (selectedMonth) {
+        params.append('month', selectedMonth);
+      }
+
+      if (activeTab === 'kardex') {
+        if (kardexFilters.location && kardexFilters.location !== 'ALL' && kardexFilters.location !== 'CONSOLIDADO GENERAL') {
+          params.append('location', kardexFilters.location);
+        }
+        if (kardexFilters.product && kardexFilters.product.trim()) {
+          params.append('product', kardexFilters.product.trim());
+        }
+      } else {
+        if (movementFilter && movementFilter !== 'all') {
+          params.append('movement', movementFilter);
+        }
+        if (docTypeFilter && docTypeFilter !== 'all') {
+          params.append('doc_type', docTypeFilter);
+        }
+        if (filter && filter.trim()) {
+          params.append('search', filter.trim());
+        }
+      }
+
+      const queryString = params.toString() ? `?${params.toString()}` : '';
+      const response = await fetch(`${API_BASE}/tsb/reports/export${queryString}`, {
         headers: {
           'X-Odoo-User': user.username,
           'X-Odoo-Key': user.password
@@ -157,6 +186,8 @@ export default function TSBReports({ showToast }) {
       showToast('Excel generado correctamente', 'success');
     } catch (err) {
       showToast(`Error al exportar: ${err.message}`, 'error');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -296,20 +327,35 @@ export default function TSBReports({ showToast }) {
 
           <button 
             onClick={handleExportExcel}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl transition-all text-xs font-bold flex items-center shadow-md active:scale-95 whitespace-nowrap"
-            title="Descargar reporte completo de Kardex en Excel"
+            disabled={exporting}
+            className={`bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl transition-all text-xs font-bold flex items-center shadow-md active:scale-95 whitespace-nowrap ${
+              exporting ? 'opacity-75 cursor-not-allowed' : ''
+            }`}
+            title="Descargar reporte filtrado de Kardex en Excel"
           >
-            <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Exportar Excel
+            {exporting ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Generando Excel...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Exportar Excel
+              </>
+            )}
           </button>
         </div>
       </div>
 
       {/* Tab Content 1: Kardex Valorizado Interactivo */}
       {activeTab === 'kardex' ? (
-        <TSBKardex rawReports={reports} loading={loading} />
+        <TSBKardex rawReports={reports} loading={loading} onFilterChange={setKardexFilters} />
       ) : (
         /* Tab Content 2: Comprobantes y Facturas */
         <>
@@ -361,12 +407,27 @@ export default function TSBReports({ showToast }) {
                   </div>
                   <button 
                     onClick={handleExportExcel}
-                    className="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl transition-all text-xs font-bold flex items-center justify-center shadow-sm active:scale-95"
+                    disabled={exporting}
+                    className={`w-full mt-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl transition-all text-xs font-bold flex items-center justify-center shadow-sm active:scale-95 ${
+                      exporting ? 'opacity-75 cursor-not-allowed' : ''
+                    }`}
                   >
-                    <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Exportar Excel Organizado
+                    {exporting ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Generando Excel...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Exportar Excel Organizado
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
