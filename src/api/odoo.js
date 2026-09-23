@@ -53,9 +53,12 @@ export const login = async (username, password) => {
     });
     return res.json();
 };
-export const fetchTSBReports = async (month = '') => {
-    const query = month ? `?month=${encodeURIComponent(month)}` : '';
-    const res = await fetch(`${API_BASE}/tsb/reports${query}`, {
+export const fetchTSBReports = async (month = '', location = '') => {
+    const params = new URLSearchParams();
+    if (month) params.append('month', month);
+    if (location && location !== 'ALL') params.append('location', location);
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`${API_BASE}/tsb/reports${queryString}`, {
         headers: getAuthHeaders()
     });
     return res.json();

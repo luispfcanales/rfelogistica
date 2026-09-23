@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
 import { fetchTSBReports } from '../../api/odoo';
 import TSBKardex from './TSBKardex';
+import { mapLocation } from '../../utils/kardex';
 
 export default function TSBReports({ showToast }) {
   const [activeTab, setActiveTab] = useState('invoices'); // 'invoices' | 'kardex'
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
+  const [posFilter, setPosFilter] = useState('CAFETIN');
 
   const getCurrentMonthStr = () => {
     const now = new Date();
@@ -108,7 +110,7 @@ export default function TSBReports({ showToast }) {
   const loadReports = async (monthToLoad = selectedMonth) => {
     setLoading(true);
     try {
-      const data = await fetchTSBReports(monthToLoad);
+      const data = await fetchTSBReports(monthToLoad, '');
       if (data && data.error) throw new Error(data.error);
       const reportList = Array.isArray(data) ? data : [];
       setReports(reportList);
@@ -213,6 +215,32 @@ export default function TSBReports({ showToast }) {
     return report.move_type === 'out_invoice' ? 'Factura Cliente' : 'Factura Proveedor';
   };
 
+  const getReportLocation = (report) => {
+    if (!report) return 'GENERAL';
+    if (Array.isArray(report.items) && report.items.length > 0) {
+      for (const item of report.items) {
+        if (item.analytic) {
+          const loc = mapLocation(item.analytic);
+          if (loc && loc !== 'GENERAL') return loc;
+        }
+      }
+    }
+    const serial = report.serial || (report.name ? report.name.split('-')[1] : '');
+    if (serial) {
+      const mapped = mapLocation(serial);
+      if (mapped && mapped !== 'GENERAL') return mapped;
+    }
+    if (report.name) {
+      const mapped = mapLocation(report.name);
+      if (mapped && mapped !== 'GENERAL') return mapped;
+    }
+    if (report.partner) {
+      const partnerLoc = mapLocation(report.partner);
+      if (partnerLoc && partnerLoc !== 'GENERAL') return partnerLoc;
+    }
+    return 'GENERAL';
+  };
+
   const filteredReports = safeReports.filter(r => {
     if (!r) return false;
     const name = (r.name || '').toLowerCase();
@@ -237,7 +265,12 @@ export default function TSBReports({ showToast }) {
       (docTypeFilter === 'factura' && docType === 'Factura') ||
       (docTypeFilter === 'inicial' && (docType === 'Inventario Inicial' || docType === 'Saldo Inicial'));
 
-    return matchesSearch && matchesState && matchesMovement && matchesDocType;
+    const rLoc = getReportLocation(r);
+    const matchesPos = posFilter === 'ALL' ||
+      rLoc.toUpperCase().includes(posFilter.toUpperCase()) ||
+      posFilter.toUpperCase().includes(rLoc.toUpperCase());
+
+    return matchesSearch && matchesState && matchesMovement && matchesDocType && matchesPos;
   }).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
   const totalAmount = filteredReports.reduce((sum, r) => sum + (r.amount_total || 0), 0);
@@ -471,8 +504,30 @@ export default function TSBReports({ showToast }) {
                     </button>
                   </div>
 
-                  {/* Doc Type Selector */}
-                  <div className="flex items-center gap-3 w-full lg:w-auto">
+                  {/* Punto de Venta & Doc Type Selector */}
+                  <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                    <div className="flex items-center bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs">
+                      <svg className="w-4 h-4 text-blue-600 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      <select
+                        value={posFilter}
+                        onChange={(e) => setPosFilter(e.target.value)}
+                        className="bg-transparent text-slate-800 focus:outline-none cursor-pointer text-xs font-bold"
+                      >
+                        <option value="CAFETIN">CAFETIN PEM (Predeterminado)</option>
+                        <option value="ARA BAR">ARA BAR</option>
+                        <option value="APA BAR">APA BAR</option>
+                        <option value="BAR TRC">BAR TRC</option>
+                        <option value="ARA BOUTIQUE">ARA BOUTIQUE</option>
+                        <option value="APA BOUTIQUE">APA BOUTIQUE</option>
+                        <option value="BOUTIQUE ARA">BOUTIQUE ARA</option>
+                        <option value="OFICINA CENTRAL COMPARTIDO">OFICINA CENTRAL COMPARTIDO</option>
+                        <option value="ALL">Todos los Puntos de Venta</option>
+                      </select>
+                    </div>
+
                     <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-300">
                       <button
                         onClick={() => setDocTypeFilter('all')}
