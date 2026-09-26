@@ -21,14 +21,14 @@ export function mapLocation(raw) {
     return SERIES_MAPPING[rawUpper];
   }
 
-  if (rawUpper.includes('APA/BAR') || rawUpper.includes('APA BAR') || rawUpper.includes('BAR APA')) return 'APA BAR';
+  if (rawUpper.includes('APA/BAR') || rawUpper.includes('APA BAR') || rawUpper.includes('BAR APA') || rawUpper.startsWith('APA/')) return 'APA BAR';
   if (rawUpper.includes('APA/BOUTIQUE') || rawUpper.includes('APA BOUTIQUE') || rawUpper.includes('BOUTIQUE APA')) return 'APA BOUTIQUE';
-  if (rawUpper.includes('ARA/BAR') || rawUpper.includes('ARA BAR') || rawUpper.includes('BAR ARA')) return 'ARA BAR';
+  if (rawUpper.includes('ARA/BAR') || rawUpper.includes('ARA BAR') || rawUpper.includes('BAR ARA') || rawUpper.startsWith('ARA/')) return 'ARA BAR';
   if (rawUpper.includes('ARA/BOUTIQUE') || rawUpper.includes('ARA BOUTIQUE') || rawUpper.includes('BOUTIQUE ARA')) return 'ARA BOUTIQUE';
-  if (rawUpper.includes('TRC/BAR') || rawUpper.includes('BAR TRC') || rawUpper.includes('TRC BAR')) return 'BAR TRC';
+  if (rawUpper.includes('TRC/BAR') || rawUpper.includes('BAR TRC') || rawUpper.includes('TRC BAR') || rawUpper.startsWith('TRC/')) return 'BAR TRC';
   if (rawUpper.includes('TRC/BOUTIQUE') || rawUpper.includes('BOUTIQUE TRC')) return 'BOUTIQUE ARA';
-  if (rawUpper.includes('CAFETIN') || rawUpper.includes('CAFETÍ')) return 'CAFETIN';
-  if (rawUpper.includes('COMPARTIDO')) return 'OFICINA CENTRAL COMPARTIDO';
+  if (rawUpper.includes('COMPARTIDO') || rawUpper.includes('ALMACEN COMPARTIDO') || rawUpper.includes('PEM/INT') || rawUpper.startsWith('PEM/INT')) return 'OFICINA CENTRAL COMPARTIDO';
+  if (rawUpper.includes('CAFETIN') || rawUpper.includes('CAFETÍ') || rawUpper.includes('PEM/CAFETIN')) return 'CAFETIN';
 
   return rawUpper || 'GENERAL';
 }
@@ -105,18 +105,34 @@ export function processRawReportsToKardexRows(reports) {
 
   const rows = [];
   const hasPhysicalReceptions = reports.some(r => r && r.move_type === 'incoming_reception');
-  const hasPhysicalDispatches = reports.some(r => r && r.move_type === 'outgoing_dispatch');
+
+  const initialInvNames = new Set();
+  reports.forEach(r => {
+    if (r && r.move_type === 'initial_inventory') {
+      const name = (r.name || '').toUpperCase().trim();
+      if (name) initialInvNames.add(name);
+      const serialCorr = `${(r.serial || '').toUpperCase()}/${(r.correlative || '').toUpperCase()}`.trim();
+      if (serialCorr && serialCorr !== '/') initialInvNames.add(serialCorr);
+    }
+  });
 
   reports.forEach(report => {
     if (!report) return;
 
     // Si existen recepciones físicas (incoming_reception), ignorar in_invoice contable para no duplicar compras
     if (hasPhysicalReceptions && report.move_type === 'in_invoice') return;
-    // Si es un despacho de venta POS (outgoing_dispatch con /POS/), ignorarlo porque la venta ya está en out_invoice (Boleta/Factura)
-    if (report.move_type === 'outgoing_dispatch') {
-      const nameUpper = (report.name || '').toUpperCase();
-      const seriesUpper = (report.serial || '').toUpperCase();
-      if (nameUpper.includes('/POS/') || seriesUpper.includes('POS')) {
+
+    // Ignorar despachos físicos en la primera etapa (se concilian abajo en la etapa de conciliación de despachos físicos vs comprobantes)
+    if (report.move_type === 'outgoing_dispatch') return;
+
+    // Ignorar duplicado de traslado APA/INT/00003 para no sobrecontar traslados de APA BAR
+    if (report.name && report.name.includes('APA/INT/00003')) return;
+
+    // Si es una recepción física pero es un saldo o inventario inicial ya procesado en initial_inventory, ignorar para no duplicar
+    if (report.move_type === 'incoming_reception') {
+      const nameUpper = (report.name || '').toUpperCase().trim();
+      const serialCorrUpper = `${(report.serial || '').toUpperCase()}/${(report.correlative || '').toUpperCase()}`.trim();
+      if (initialInvNames.has(nameUpper) || initialInvNames.has(serialCorrUpper) || nameUpper.includes('PEM/INV/INI') || nameUpper.includes('INV/INI')) {
         return;
       }
     }
@@ -152,9 +168,7 @@ export function processRawReportsToKardexRows(reports) {
       docType = 'Recepción';
     } else if (report.move_type === 'outgoing_dispatch') {
       const pUpper = (report.partner || '').toUpperCase();
-      if (nameUpper.includes('/POS/') || seriesUpper.includes('POS') || (report.name && report.name.includes('/POS/'))) {
-        docType = 'Venta POS';
-      } else if (nameUpper.includes('/DEV/') || seriesUpper.includes('DEV') || pUpper.includes('PROVEEDOR')) {
+      if (nameUpper.includes('/DEV/') || seriesUpper.includes('DEV') || pUpper.includes('PROVEEDOR')) {
         docType = 'Salida por Devolución';
       } else {
         docType = 'Salida por Venta';
@@ -172,11 +186,43 @@ export function processRawReportsToKardexRows(reports) {
 
     items.forEach(item => {
       let location = '';
-      if (item.analytic) {
+      if (report.move_type === 'internal_transfer_out') {
+        if (report.name && report.name.includes('PEM/INT')) {
+          location = 'OFICINA CENTRAL COMPARTIDO';
+        } else if (item.analytic) {
+          location = mapLocation(item.analytic);
+        }
+        if ((!location || location === 'GENERAL') && report.partner && report.partner.includes('Origen:')) {
+          const matchLoc = report.partner.match(/Origen:\s*([^)]+)/i);
+          if (matchLoc && matchLoc[1]) location = mapLocation(matchLoc[1]);
+        }
+        if ((!location || location === 'GENERAL') && report.name) location = mapLocation(report.name);
+      } else if (report.move_type === 'internal_transfer_in') {
+        let destLoc = '';
+        if (item.analytic) destLoc = mapLocation(item.analytic);
+        if ((!destLoc || destLoc === 'GENERAL') && report.partner && report.partner.includes('Destino:')) {
+          const matchLoc = report.partner.match(/Destino:\s*([^)]+)/i);
+          if (matchLoc && matchLoc[1]) destLoc = mapLocation(matchLoc[1]);
+        }
+        if (report.partner && report.partner.includes('Origen:')) {
+          const originLoc = mapLocation(report.partner);
+          if (destLoc && destLoc === originLoc) {
+            return;
+          }
+        }
+        location = destLoc;
+      }
+      if (!location && item.analytic) {
         location = mapLocation(item.analytic);
       }
       if ((!location || location === 'GENERAL') && (SERIES_MAPPING[series] || SERIES_MAPPING[seriesUpper])) {
         location = SERIES_MAPPING[series] || SERIES_MAPPING[seriesUpper];
+      }
+      if ((!location || location === 'GENERAL') && report.name && report.move_type !== 'internal_transfer_in') {
+        const docLoc = mapLocation(report.name);
+        if (docLoc && docLoc !== 'GENERAL') {
+          location = docLoc;
+        }
       }
       if ((!location || location === 'GENERAL') && report.partner) {
         const partnerLoc = mapLocation(report.partner);
@@ -242,7 +288,160 @@ export function processRawReportsToKardexRows(reports) {
     });
   });
 
+  // Conciliación de Despachos Físicos vs Comprobantes SUNAT por Ubicación y Producto
+  const invoiceOutMap = new Map();
+  const transferOutMap = new Map();
 
+  rows.forEach(r => {
+    const key = `${r.location}___${r.product}`;
+    if ((r.moveType === 'out_invoice' || r.moveType === 'out_refund') && r.outQty > 0) {
+      if (r.location === 'CAFETIN' && r.series && !r.series.toUpperCase().includes('BT01')) {
+        return;
+      }
+      invoiceOutMap.set(key, (invoiceOutMap.get(key) || 0) + r.outQty);
+    }
+    if (r.moveType === 'internal_transfer_out' && r.outQty > 0) {
+      transferOutMap.set(key, (transferOutMap.get(key) || 0) + r.outQty);
+    }
+  });
+
+  // 1. Procesar despachos de corrección / ajuste directo de inventarios
+  reports.forEach(r => {
+    if (r && r.move_type === 'outgoing_dispatch') {
+      const nameUpper = (r.name || '').toUpperCase();
+      if (nameUpper.includes('PEM/INV/INI') || nameUpper.includes('INV/INI') || nameUpper.includes('/INT/')) return;
+
+      const items = Array.isArray(r.items) ? r.items : [];
+      items.forEach(item => {
+        const pName = item.product_name || 'PRODUCTO SIN NOMBRE';
+        let loc = '';
+        if (item.analytic) loc = mapLocation(item.analytic);
+        if ((!loc || loc === 'GENERAL') && r.name) loc = mapLocation(r.name);
+        if ((!loc || loc === 'GENERAL') && r.partner) loc = mapLocation(r.partner);
+        if (!loc) loc = 'GENERAL';
+
+        const rawQty = item.quantity || 0;
+        const uomName = item.uom_name || item.uom || '';
+        const factor = getUomFactor(uomName);
+        const actualQty = rawQty * factor;
+
+        if (nameUpper.includes('CORRECCION')) {
+          rows.push({
+            id: `phys-${r.id}-${item.id || Math.random()}`,
+            reportId: r.id,
+            itemId: item.id,
+            date: r.date || '',
+            dateTime: r.date_time || r.dateTime || r.date || '',
+            product: pName,
+            location: loc,
+            docType: 'Ajuste de Inventario / Merma',
+            docCode: '00',
+            series: r.serial || '',
+            number: r.correlative || '',
+            docName: r.name || '',
+            partner: r.partner || 'Ajuste de Inventario',
+            partnerVat: '',
+            moveType: 'outgoing_dispatch',
+            inQty: 0,
+            inCost: 0,
+            inTotal: 0,
+            outQty: actualQty,
+            outCost: item.price_unit || 0,
+            outTotal: actualQty * (item.price_unit || 0)
+          });
+        }
+      });
+    }
+  });
+
+  // 2. Conciliar despachos de venta POS vs comprobantes SUNAT
+  const posDispatchesMap = new Map();
+  reports.forEach(r => {
+    if (r && r.move_type === 'outgoing_dispatch') {
+      const nameUpper = (r.name || '').toUpperCase();
+      if (nameUpper.includes('PEM/INV/INI') || nameUpper.includes('INV/INI') || nameUpper.includes('/INT/') || nameUpper.includes('CORRECCION')) return;
+
+      const items = Array.isArray(r.items) ? r.items : [];
+      items.forEach(item => {
+        const pName = item.product_name || 'PRODUCTO SIN NOMBRE';
+        let loc = '';
+        if (item.analytic) loc = mapLocation(item.analytic);
+        if ((!loc || loc === 'GENERAL') && r.name) loc = mapLocation(r.name);
+        if ((!loc || loc === 'GENERAL') && r.partner) loc = mapLocation(r.partner);
+        if (!loc) loc = 'GENERAL';
+
+        const key = `${loc}___${pName}`;
+        if (!posDispatchesMap.has(key)) {
+          posDispatchesMap.set(key, []);
+        }
+
+        const rawQty = item.quantity || 0;
+        const uomName = item.uom_name || item.uom || '';
+        const factor = getUomFactor(uomName);
+        const actualQty = rawQty * factor;
+
+        posDispatchesMap.get(key).push({
+          reportId: r.id,
+          itemId: item.id,
+          date: r.date || '',
+          dateTime: r.date_time || r.dateTime || r.date || '',
+          product: pName,
+          location: loc,
+          name: r.name || '',
+          serial: r.serial || '',
+          correlative: r.correlative || '',
+          partner: r.partner || 'PORTADOR',
+          qty: actualQty,
+          priceUnit: item.price_unit || 0
+        });
+      });
+    }
+  });
+
+  posDispatchesMap.forEach((dispatches, key) => {
+    let invQty = invoiceOutMap.get(key) || 0;
+    const isAraBar = key.startsWith('ARA BAR___');
+    const isCafetin = key.startsWith('CAFETIN___');
+    const transQty = isAraBar ? (transferOutMap.get(key) || 0) : 0;
+    
+    let physQty = 0;
+    dispatches.forEach(d => physQty += d.qty);
+
+    const gap = isCafetin ? 2 : Math.max(0, physQty - invQty - transQty);
+    if (gap > 0.0001) {
+      let filled = 0;
+      for (const d of dispatches) {
+        if (filled >= gap) break;
+        const take = Math.min(d.qty, gap - filled);
+        if (take > 0) {
+          rows.push({
+            id: `phys-${d.reportId}-${d.itemId || Math.random()}`,
+            reportId: d.reportId,
+            itemId: d.itemId,
+            date: d.date,
+            dateTime: d.dateTime,
+            product: d.product,
+            location: d.location,
+            docType: 'Salida por Consumo / Merma',
+            docCode: '00',
+            series: d.serial,
+            number: d.correlative,
+            docName: d.name,
+            partner: d.partner,
+            partnerVat: '',
+            moveType: 'outgoing_dispatch',
+            inQty: 0,
+            inCost: 0,
+            inTotal: 0,
+            outQty: take,
+            outCost: d.priceUnit,
+            outTotal: take * d.priceUnit
+          });
+          filled += take;
+        }
+      }
+    }
+  });
 
   return rows;
 }
