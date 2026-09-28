@@ -187,14 +187,15 @@ export function processRawReportsToKardexRows(reports) {
     items.forEach(item => {
       let location = '';
       if (report.move_type === 'internal_transfer_out') {
-        if (report.name && report.name.includes('PEM/INT')) {
-          location = 'OFICINA CENTRAL COMPARTIDO';
-        } else if (item.analytic) {
+        if (item.analytic) {
           location = mapLocation(item.analytic);
         }
         if ((!location || location === 'GENERAL') && report.partner && report.partner.includes('Origen:')) {
           const matchLoc = report.partner.match(/Origen:\s*([^)]+)/i);
           if (matchLoc && matchLoc[1]) location = mapLocation(matchLoc[1]);
+        }
+        if ((!location || location === 'GENERAL') && report.name && report.name.includes('PEM/INT')) {
+          location = 'OFICINA CENTRAL COMPARTIDO';
         }
         if ((!location || location === 'GENERAL') && report.name) location = mapLocation(report.name);
       } else if (report.move_type === 'internal_transfer_in') {
@@ -266,7 +267,9 @@ export function processRawReportsToKardexRows(reports) {
         inTotal: 0,
         outQty: 0,
         outCost: 0,
-        outTotal: 0
+        outTotal: 0,
+        rawReport: report,
+        rawItem: item
       };
 
       const rawQty = item.quantity || 0;
@@ -325,7 +328,7 @@ export function processRawReportsToKardexRows(reports) {
         const factor = getUomFactor(uomName);
         const actualQty = rawQty * factor;
 
-        if (nameUpper.includes('CORRECCION')) {
+        if (nameUpper.includes('CORRECCION') || nameUpper.includes('CORRECION')) {
           rows.push({
             id: `phys-${r.id}-${item.id || Math.random()}`,
             reportId: r.id,
@@ -347,7 +350,9 @@ export function processRawReportsToKardexRows(reports) {
             inTotal: 0,
             outQty: actualQty,
             outCost: item.price_unit || 0,
-            outTotal: actualQty * (item.price_unit || 0)
+            outTotal: actualQty * (item.price_unit || 0),
+            rawReport: r,
+            rawItem: item
           });
         }
       });
@@ -392,7 +397,9 @@ export function processRawReportsToKardexRows(reports) {
           correlative: r.correlative || '',
           partner: r.partner || 'PORTADOR',
           qty: actualQty,
-          priceUnit: item.price_unit || 0
+          priceUnit: item.price_unit || 0,
+          rawReport: r,
+          rawItem: item
         });
       });
     }
@@ -435,7 +442,9 @@ export function processRawReportsToKardexRows(reports) {
             inTotal: 0,
             outQty: take,
             outCost: d.priceUnit,
-            outTotal: take * d.priceUnit
+            outTotal: take * d.priceUnit,
+            rawReport: d.rawReport,
+            rawItem: d.rawItem
           });
           filled += take;
         }
