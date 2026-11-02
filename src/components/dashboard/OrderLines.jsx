@@ -1,5 +1,5 @@
 export default function OrderLines({ lines, toggleAll, toggleLine, updateQty }) {
-    if (lines.length === 0) return null;
+    if (!lines || lines.length === 0) return null;
 
     const allSelected = lines.length > 0 && lines.every(l => l.selected);
     const selectedCount = lines.filter(l => l.selected).length;
@@ -9,24 +9,24 @@ export default function OrderLines({ lines, toggleAll, toggleLine, updateQty }) 
         <div className="mb-6">
             <div className="flex justify-between items-center mb-4">
                 <div className="flex gap-4">
-                    <button onClick={() => toggleAll({ target: { checked: true } })} className="text-sm font-medium text-gray-400 hover:text-gray-200 transition-colors bg-[#161B22] border border-[#2D333B] px-4 py-2 rounded-lg">Seleccionar todo</button>
-                    <button onClick={() => toggleAll({ target: { checked: false } })} className="text-sm font-medium text-gray-400 hover:text-gray-200 transition-colors bg-[#161B22] border border-[#2D333B] px-4 py-2 rounded-lg">Deseleccionar todo</button>
+                    <button onClick={() => toggleAll({ target: { checked: true } })} className="text-xs font-semibold text-slate-700 hover:text-slate-900 transition-colors bg-white border border-slate-300 px-4 py-2 rounded-xl shadow-sm">Seleccionar todo</button>
+                    <button onClick={() => toggleAll({ target: { checked: false } })} className="text-xs font-semibold text-slate-700 hover:text-slate-900 transition-colors bg-white border border-slate-300 px-4 py-2 rounded-xl shadow-sm">Deseleccionar todo</button>
                 </div>
                 <div className="flex items-center gap-4">
-                    <span className="text-sm bg-blue-600/20 text-blue-400 px-3 py-1.5 rounded-lg border border-blue-500/20">{selectedCount} seleccionados</span>
-                    <span className="text-sm font-mono text-emerald-400 bg-emerald-900/20 border border-emerald-800/30 px-3 py-1.5 rounded-lg">S/ {selectedTotal.toFixed(2)}</span>
+                    <span className="text-xs font-bold bg-blue-50 text-blue-700 px-3.5 py-2 rounded-xl border border-blue-200">{selectedCount} seleccionados</span>
+                    <span className="text-xs font-mono font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3.5 py-2 rounded-xl">S/ {selectedTotal.toFixed(2)}</span>
                 </div>
             </div>
 
-            <div className="bg-[#161B22] rounded-xl border border-[#2D333B] shadow-sm overflow-hidden">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="border-b border-[#2D333B] text-[10px] text-gray-500 uppercase tracking-wider font-semibold">
+                            <tr className="border-b border-slate-200 text-[10px] text-slate-500 uppercase tracking-wider font-bold bg-slate-50">
                                 <th className="px-4 py-4 text-center w-12">
                                     <input
                                         type="checkbox"
-                                        className="w-4 h-4 rounded border-[#30363D] bg-[#0D1117] text-blue-500 focus:ring-blue-500 focus:ring-offset-[#161B22]"
+                                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                         checked={allSelected}
                                         onChange={toggleAll}
                                     />
@@ -41,30 +41,30 @@ export default function OrderLines({ lines, toggleAll, toggleLine, updateQty }) 
                                 <th className="px-4 py-4 text-right">Subtotal</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-[#2D333B]/50">
+                        <tbody className="divide-y divide-slate-100">
                             {lines.map((line, index) => (
-                                <tr key={line.id} className={`transition-colors ${line.selected ? 'bg-blue-900/10' : 'hover:bg-[#1C2128]'}`}>
+                                <tr key={line.id} className={`transition-colors ${line.selected ? 'bg-blue-50/50 hover:bg-blue-50' : 'hover:bg-slate-50'}`}>
                                     <td className="px-4 py-4 text-center">
                                         <input
                                             type="checkbox"
-                                            className="w-4 h-4 rounded border-[#30363D] bg-[#0D1117] text-blue-500 focus:ring-blue-500 focus:ring-offset-[#161B22] cursor-pointer"
+                                            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                             checked={line.selected}
                                             onChange={() => toggleLine(line.id)}
                                         />
                                     </td>
-                                    <td className="px-4 py-4 text-center text-sm font-mono text-gray-500">{index + 1}</td>
+                                    <td className="px-4 py-4 text-center text-sm font-mono text-slate-400">{index + 1}</td>
                                     <td className="px-4 py-4">
-                                        <div className="font-semibold text-sm text-gray-200">[{line.product_id ? line.product_id[0] : ''}] {line.product_name || line.name}</div>
-                                        <div className="text-xs text-gray-500 mt-0.5">{line.uom_name || 'Units'}</div>
+                                        <div className="font-bold text-sm text-slate-900">[{line.product_id ? line.product_id[0] : ''}] {line.product_name || line.name}</div>
+                                        <div className="text-xs text-slate-500 mt-0.5">{line.uom_name || 'Units'}</div>
                                     </td>
-                                    <td className="px-4 py-4 text-center font-mono text-sm text-gray-300">{line.product_qty.toFixed(2)}</td>
-                                    <td className="px-4 py-4 text-center font-mono text-sm text-gray-500">{(line.product_qty - line.pending).toFixed(2)}</td>
+                                    <td className="px-4 py-4 text-center font-mono text-sm text-slate-700">{line.product_qty.toFixed(2)}</td>
+                                    <td className="px-4 py-4 text-center font-mono text-sm text-slate-400">{(line.product_qty - line.pending).toFixed(2)}</td>
                                     <td className="px-4 py-4 text-center">
-                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-amber-900/30 text-amber-500 border border-amber-700/30">
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-bold bg-amber-50 text-amber-700 border border-amber-200">
                                             {line.pending.toFixed(2)}
                                         </span>
                                     </td>
-                                    <td className="px-4 py-4 text-right font-mono text-sm text-gray-300">S/ {line.price_unit.toFixed(2)}</td>
+                                    <td className="px-4 py-4 text-right font-mono text-sm text-slate-700">S/ {line.price_unit.toFixed(2)}</td>
                                     <td className="px-4 py-4 text-center">
                                         <input
                                             type="number"
@@ -74,10 +74,10 @@ export default function OrderLines({ lines, toggleAll, toggleLine, updateQty }) 
                                             disabled={!line.selected}
                                             value={line.invoiceQty}
                                             onChange={(e) => updateQty(line.id, e.target.value)}
-                                            className="w-20 text-center bg-[#0D1117] border border-[#30363D] rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-500 disabled:opacity-30 text-gray-200 font-mono"
+                                            className="w-20 text-center bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-blue-600 disabled:opacity-40 text-blue-700 font-bold font-mono"
                                         />
                                     </td>
-                                    <td className="px-4 py-4 text-right font-medium text-sm text-gray-200 font-mono">
+                                    <td className="px-4 py-4 text-right font-bold text-sm text-slate-900 font-mono">
                                         S/ {(line.invoiceQty * line.price_unit).toFixed(2)}
                                     </td>
                                 </tr>

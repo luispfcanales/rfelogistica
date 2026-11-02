@@ -14,6 +14,8 @@ import Modal from './components/ui/Modal';
 import MainMenuView from './components/dashboard/MainMenuView';
 import TSBStock from './components/dashboard/TSBStock';
 import UserEmailManager from './components/dashboard/UserEmailManager';
+import AnalyticConverter from './components/dashboard/AnalyticConverter';
+import DeliveryModule from './components/dashboard/DeliveryModule';
 
 export default function App() {
   const { toast, showToast } = useToast();
@@ -74,9 +76,10 @@ export default function App() {
       setOrder(orderData);
 
       const linesData = await fetchOrderLines(orderData.id);
-      if (linesData.error) throw new Error(linesData.error);
+      if (linesData && linesData.error) throw new Error(linesData.error);
 
-      setLines(linesData.map(l => ({ ...l, selected: true, invoiceQty: l.pending })));
+      const safeLines = Array.isArray(linesData) ? linesData : [];
+      setLines(safeLines.map(l => ({ ...l, selected: true, invoiceQty: l.pending })));
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -149,6 +152,10 @@ export default function App() {
           <TSBStock showToast={showToast} />
         ) : view === 'users' ? (
           <UserEmailManager showToast={showToast} />
+        ) : view === 'analytic' ? (
+          <AnalyticConverter showToast={showToast} />
+        ) : view === 'delivery' ? (
+          <DeliveryModule showToast={showToast} />
         ) : (
           <>
             <SearchPanel

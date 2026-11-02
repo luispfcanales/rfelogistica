@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
-import { fetchTSBReports } from '../../api/odoo';
+import { fetchTSBReports, downloadTSBKardexExcel } from '../../api/odoo';
 import TSBKardex from './TSBKardex';
+import TSBReconciliationModal from './TSBReconciliationModal';
 import { mapLocation } from '../../utils/kardex';
 
 export default function TSBReports({ showToast }) {
@@ -9,6 +10,7 @@ export default function TSBReports({ showToast }) {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
   const [posFilter, setPosFilter] = useState('CAFETIN');
+  const [isReconcileOpen, setIsReconcileOpen] = useState(false);
 
   const getCurrentMonthStr = () => {
     const now = new Date();
@@ -134,25 +136,26 @@ export default function TSBReports({ showToast }) {
   const handleExportExcel = async () => {
     setExporting(true);
     try {
-      const savedUser = localStorage.getItem('odoo_user');
-      if (!savedUser) return;
-      const user = JSON.parse(savedUser);
-      
-      const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080/api';
-      const params = new URLSearchParams();
-
-      if (selectedMonth) {
-        params.append('month', selectedMonth);
-      }
-
       if (activeTab === 'kardex') {
-        if (kardexFilters.location && kardexFilters.location !== 'ALL' && kardexFilters.location !== 'CONSOLIDADO GENERAL') {
-          params.append('location', kardexFilters.location);
-        }
-        if (kardexFilters.product && kardexFilters.product.trim()) {
-          params.append('product', kardexFilters.product.trim());
-        }
+        await downloadTSBKardexExcel({
+          month: selectedMonth,
+          location: kardexFilters.location,
+          product: kardexFilters.product,
+          method: kardexFilters.method || 'GLOBAL_AVCO',
+          sort: kardexFilters.sort || 'desc'
+        });
+        showToast('Kardex Excel generado y descargado correctamente', 'success');
       } else {
+        const savedUser = localStorage.getItem('odoo_user');
+        if (!savedUser) return;
+        const user = JSON.parse(savedUser);
+        
+        const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080/api';
+        const params = new URLSearchParams();
+
+        if (selectedMonth) {
+          params.append('month', selectedMonth);
+        }
         if (movementFilter && movementFilter !== 'all') {
           params.append('movement', movementFilter);
         }
@@ -162,30 +165,30 @@ export default function TSBReports({ showToast }) {
         if (filter && filter.trim()) {
           params.append('search', filter.trim());
         }
+
+        const queryString = params.toString() ? `?${params.toString()}` : '';
+        const response = await fetch(`${API_BASE}/tsb/reports/export${queryString}`, {
+          headers: {
+            'X-Odoo-User': user.username,
+            'X-Odoo-Key': user.password
+          }
+        });
+
+        if (!response.ok) throw new Error('Error al generar el reporte');
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const monthSuffix = selectedMonth ? selectedMonth : 'todos';
+        a.download = `reporte_comprobantes_tsb_${monthSuffix}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showToast('Excel generado correctamente', 'success');
       }
-
-      const queryString = params.toString() ? `?${params.toString()}` : '';
-      const response = await fetch(`${API_BASE}/tsb/reports/export${queryString}`, {
-        headers: {
-          'X-Odoo-User': user.username,
-          'X-Odoo-Key': user.password
-        }
-      });
-
-      if (!response.ok) throw new Error('Error al generar el reporte');
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const monthSuffix = selectedMonth ? selectedMonth : 'todos';
-      a.download = `reporte_kardex_tsb_${monthSuffix}_${new Date().toISOString().split('T')[0]}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      
-      showToast('Excel generado correctamente', 'success');
     } catch (err) {
       showToast(`Error al exportar: ${err.message}`, 'error');
     } finally {
@@ -359,6 +362,17 @@ export default function TSBReports({ showToast }) {
           </div>
 
           <button 
+            onClick={() => setIsReconcileOpen(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl transition-all text-xs font-bold flex items-center shadow-md active:scale-95 whitespace-nowrap"
+            title="Verificar conciliación física contra stock.quant (100% Exacto)"
+          >
+            <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Auditoría stock.quant
+          </button>
+
+          <button 
             onClick={handleExportExcel}
             disabled={exporting}
             className={`bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl transition-all text-xs font-bold flex items-center shadow-md active:scale-95 whitespace-nowrap ${
@@ -388,7 +402,7 @@ export default function TSBReports({ showToast }) {
 
       {/* Tab Content 1: Kardex Valorizado Interactivo */}
       {activeTab === 'kardex' ? (
-        <TSBKardex rawReports={reports} loading={loading} onFilterChange={setKardexFilters} />
+        <TSBKardex selectedMonth={selectedMonth} onFilterChange={setKardexFilters} />
       ) : (
         /* Tab Content 2: Comprobantes y Facturas */
         <>
@@ -811,6 +825,12 @@ export default function TSBReports({ showToast }) {
           )}
         </>
       )}
+
+      {/* Live Reconciliation Modal against stock.quant */}
+      <TSBReconciliationModal
+        isOpen={isReconcileOpen}
+        onClose={() => setIsReconcileOpen(false)}
+      />
     </div>
   );
 }

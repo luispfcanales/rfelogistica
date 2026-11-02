@@ -11,7 +11,9 @@ export default function Header({ user, onLogout, selectedCount, selectedTotal, o
                             {currentView === 'billing' ? 'Facturación Parcial' : 
                              currentView === 'reports' ? 'Reportes TSB' : 
                              currentView === 'stock' ? 'Stock Tambopata' : 
-                             currentView === 'users' ? 'Gestión de Usuarios' : 'Odoo RP'}
+                             currentView === 'users' ? 'Gestión de Usuarios' : 
+                             currentView === 'analytic' ? 'Distribución Analítica Excel' : 
+                             currentView === 'delivery' ? 'Crear Entregas desde OC' : 'Odoo RP'}
                         </h1>
                     </div>
                     

@@ -47,14 +47,38 @@ export default function MainMenuView({ onSelectView }) {
       ),
       color: 'from-violet-600 to-indigo-400',
       shadow: 'shadow-violet-500/20'
+    },
+    {
+      id: 'analytic',
+      title: 'Distribución Analítica Excel',
+      description: 'Convertir nombres de Unidades de Negocio a ID Odoo {"937": 100.0}',
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+        </svg>
+      ),
+      color: 'from-indigo-600 to-violet-500',
+      shadow: 'shadow-indigo-500/20'
+    },
+    {
+      id: 'delivery',
+      title: 'Crear Entregas desde OC',
+      description: 'Generar borrador de movimiento (Inventario -> Operaciones -> Entregas) desde una Orden de Compra',
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 4H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-2m-4-1v8m0 0l3-3m-3 3L9 8m-5 5h2.586a1 1 0 01.707.293l2.414 2.414a1 1 0 00.707.293h3.172a1 1 0 00.707-.293l2.414-2.414a1 1 0 01.707-.293H20" />
+        </svg>
+      ),
+      color: 'from-teal-600 to-cyan-400',
+      shadow: 'shadow-teal-500/20'
     }
   ];
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] animate-in fade-in zoom-in duration-500">
       <div className="text-center mb-12">
-        <h2 className="text-3xl font-bold text-white mb-2">Bienvenido a Odoo RP</h2>
-        <p className="text-gray-500">Selecciona una aplicación para comenzar</p>
+        <h2 className="text-3xl font-extrabold text-slate-900 mb-2 tracking-tight">Bienvenido a Odoo RP</h2>
+        <p className="text-slate-500 font-medium">Selecciona una aplicación para comenzar</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl px-6">
@@ -62,7 +86,7 @@ export default function MainMenuView({ onSelectView }) {
           <button
             key={app.id}
             onClick={() => onSelectView(app.id)}
-            className="group relative bg-[#161B22] border border-gray-800 rounded-3xl p-8 text-left transition-all duration-300 hover:border-blue-500/50 hover:shadow-2xl hover:-translate-y-2 overflow-hidden"
+            className="group relative bg-white border border-slate-200 rounded-3xl p-8 text-left transition-all duration-300 hover:border-blue-500/50 hover:shadow-2xl hover:shadow-blue-500/10 hover:-translate-y-1 overflow-hidden"
           >
             {/* Background Gradient Effect */}
             <div className={`absolute -right-12 -top-12 w-40 h-40 bg-gradient-to-br ${app.color} opacity-0 group-hover:opacity-10 blur-3xl transition-opacity duration-500`}></div>
@@ -72,15 +96,15 @@ export default function MainMenuView({ onSelectView }) {
                 {app.icon}
               </div>
               
-              <h3 className="text-2xl font-bold text-gray-100 mb-2 group-hover:text-blue-400 transition-colors">
+              <h3 className="text-2xl font-bold text-slate-900 mb-2 group-hover:text-blue-600 transition-colors">
                 {app.title}
               </h3>
               
-              <p className="text-gray-500 leading-relaxed">
+              <p className="text-slate-600 leading-relaxed text-sm">
                 {app.description}
               </p>
 
-              <div className="mt-8 flex items-center text-xs font-bold text-gray-600 tracking-widest uppercase group-hover:text-white transition-colors">
+              <div className="mt-8 flex items-center text-xs font-bold text-slate-400 tracking-widest uppercase group-hover:text-blue-600 transition-colors">
                 Ingresar
                 <svg className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
