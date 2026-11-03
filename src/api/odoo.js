@@ -64,7 +64,7 @@ export const fetchTSBReports = async (month = '', location = '') => {
     return res.json();
 };
 
-export const fetchTSBKardex = async ({ month = '', location = 'ALL', product = '', method = 'GLOBAL_AVCO', sort = 'desc' } = {}) => {
+export const fetchTSBKardex = async ({ month = '', location = 'ALL', product = '', method = 'GLOBAL_AVCO', sort = 'asc' } = {}) => {
     const params = new URLSearchParams();
     if (month) params.append('month', month);
     if (location && location !== 'ALL') params.append('location', location);
@@ -85,7 +85,7 @@ export const fetchTSBReconciliation = async () => {
     return res.json();
 };
 
-export const downloadTSBKardexExcel = async ({ month = '', location = 'ALL', product = '', method = 'GLOBAL_AVCO', sort = 'desc' } = {}) => {
+export const downloadTSBKardexExcel = async ({ month = '', location = 'ALL', product = '', method = 'GLOBAL_AVCO', sort = 'asc' } = {}) => {
     const params = new URLSearchParams();
     if (month) params.append('month', month);
     if (location && location !== 'ALL') params.append('location', location);

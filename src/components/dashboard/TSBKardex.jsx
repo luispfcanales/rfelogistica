@@ -18,10 +18,12 @@ export default function TSBKardex({ selectedMonth = '', onFilterChange }) {
   const [productSearch, setProductSearch] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('ALL');
   const [costingMethod, setCostingMethod] = useState('GLOBAL_AVCO');
-  const [sortDirection, setSortDirection] = useState('desc');
+  const [sortDirection, setSortDirection] = useState('asc');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedMovementRow, setSelectedMovementRow] = useState(null);
   const [exportingKardex, setExportingKardex] = useState(false);
+  const [catalogPage, setCatalogPage] = useState(1);
+  const [catalogPageSize, setCatalogPageSize] = useState(15);
 
   // Notify parent component of filter changes
   useEffect(() => {
@@ -93,6 +95,19 @@ export default function TSBKardex({ selectedMonth = '', onFilterChange }) {
       return p.toLowerCase().includes(query) || (pData?.defaultCode && pData.defaultCode.toLowerCase().includes(query));
     });
   }, [productsList, productsData, productSearch]);
+
+  // Reset pagination when search, location, or month changes
+  useEffect(() => {
+    setCatalogPage(1);
+  }, [productSearch, selectedLocation, selectedMonth]);
+
+  const totalCatalogPages = Math.max(1, Math.ceil(matchingProducts.length / catalogPageSize));
+  const currentCatalogPage = Math.min(catalogPage, totalCatalogPages);
+
+  const paginatedProducts = useMemo(() => {
+    const startIdx = (currentCatalogPage - 1) * catalogPageSize;
+    return matchingProducts.slice(startIdx, startIdx + catalogPageSize);
+  }, [matchingProducts, currentCatalogPage, catalogPageSize]);
 
   const activeProductData = selectedProduct ? productsData[selectedProduct] : null;
 
@@ -625,6 +640,53 @@ export default function TSBKardex({ selectedMonth = '', onFilterChange }) {
                     );
                   })}
                 </tbody>
+
+                {/* Resumen al final del historial (idéntico al Excel) */}
+                <tfoot>
+                  <tr className="bg-slate-100 border-t-2 border-b-2 border-slate-400 text-xs font-mono font-extrabold text-slate-900">
+                    <td
+                      colSpan={selectedLocation === 'ALL' ? 9 : 8}
+                      className="px-3.5 py-3 text-right font-sans font-extrabold uppercase tracking-wide text-slate-800 border-r border-slate-300 bg-slate-200/70"
+                    >
+                      TOTAL {activeProductData.productName.toUpperCase()} (UdM: {activeProductData.uomName}):
+                    </td>
+
+                    {/* Total Entradas */}
+                    <td className="px-3 py-3 text-right font-black text-amber-950 bg-amber-100/80 whitespace-nowrap">
+                      {formatQuantity(activeProductData.summary.totInQty, activeProductData.uomName)}
+                    </td>
+                    <td className="px-3 py-3 text-right text-slate-400 bg-amber-100/80">
+                      
+                    </td>
+                    <td className="px-3 py-3 text-right font-black text-amber-950 bg-amber-100/80 border-r border-slate-300 whitespace-nowrap">
+                      {formatCurrency(activeProductData.summary.totInTotal)}
+                    </td>
+
+                    {/* Total Salidas */}
+                    <td className="px-3 py-3 text-right font-black text-emerald-950 bg-emerald-100/80 whitespace-nowrap">
+                      {formatQuantity(activeProductData.summary.totOutQty, activeProductData.uomName)}
+                    </td>
+                    <td className="px-3 py-3 text-right text-slate-400 bg-emerald-100/80">
+                      
+                    </td>
+                    <td className="px-3 py-3 text-right font-black text-emerald-950 bg-emerald-100/80 border-r border-slate-300 whitespace-nowrap">
+                      {formatCurrency(activeProductData.summary.totOutTotal)}
+                    </td>
+
+                    {/* Saldo Final */}
+                    <td className={`px-3 py-3 text-right font-black bg-blue-100/80 whitespace-nowrap ${
+                      activeProductData.summary.hasNegative ? 'text-rose-700' : 'text-blue-950'
+                    }`}>
+                      {formatQuantity(activeProductData.summary.finalBalanceQty, activeProductData.uomName)}
+                    </td>
+                    <td className="px-3 py-3 text-right font-extrabold text-blue-900 bg-blue-100/80 whitespace-nowrap">
+                      {formatCurrency(activeProductData.summary.finalBalanceCost)}
+                    </td>
+                    <td className="px-3 py-3 text-right font-black text-blue-950 bg-blue-100/80 whitespace-nowrap">
+                      {formatCurrency(activeProductData.summary.finalBalanceTotal)}
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </div>
@@ -642,7 +704,24 @@ export default function TSBKardex({ selectedMonth = '', onFilterChange }) {
                 Valores calculados por el motor oficial en Go con AVCO ponderado
               </p>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs">
+                <span className="text-slate-500 font-semibold">Mostrar:</span>
+                <select
+                  value={catalogPageSize}
+                  onChange={(e) => {
+                    setCatalogPageSize(Number(e.target.value));
+                    setCatalogPage(1);
+                  }}
+                  className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"
+                >
+                  <option value={10}>10</option>
+                  <option value={15}>15</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
               <span className="text-xs font-mono font-bold bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-xl">
                 {matchingProducts.length} productos
               </span>
@@ -665,7 +744,7 @@ export default function TSBKardex({ selectedMonth = '', onFilterChange }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 text-xs">
-                {matchingProducts.map((pName) => {
+                {paginatedProducts.map((pName) => {
                   const pData = productsData[pName];
                   if (!pData) return null;
                   const { summary, uomName } = pData;
@@ -725,6 +804,65 @@ export default function TSBKardex({ selectedMonth = '', onFilterChange }) {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Footer */}
+          {matchingProducts.length > 0 && (
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="text-xs text-slate-600 font-medium">
+                Mostrando{' '}
+                <span className="font-bold text-slate-900">
+                  {(currentCatalogPage - 1) * catalogPageSize + 1}
+                </span>{' '}
+                a{' '}
+                <span className="font-bold text-slate-900">
+                  {Math.min(currentCatalogPage * catalogPageSize, matchingProducts.length)}
+                </span>{' '}
+                de{' '}
+                <span className="font-bold text-slate-900">
+                  {matchingProducts.length}
+                </span>{' '}
+                productos
+              </div>
+
+              <div className="flex items-center space-x-1.5">
+                <button
+                  onClick={() => setCatalogPage(1)}
+                  disabled={currentCatalogPage === 1}
+                  className="px-2.5 py-1.5 rounded-xl text-xs font-bold border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  title="Primera página"
+                >
+                  «
+                </button>
+                <button
+                  onClick={() => setCatalogPage((p) => Math.max(1, p - 1))}
+                  disabled={currentCatalogPage === 1}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Anterior
+                </button>
+
+                <span className="px-3 py-1.5 rounded-xl text-xs font-mono font-bold bg-blue-600 text-white shadow-sm">
+                  Página {currentCatalogPage} de {totalCatalogPages}
+                </span>
+
+                <button
+                  onClick={() => setCatalogPage((p) => Math.min(totalCatalogPages, p + 1))}
+                  disabled={currentCatalogPage === totalCatalogPages}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Siguiente
+                </button>
+                <button
+                  onClick={() => setCatalogPage(totalCatalogPages)}
+                  disabled={currentCatalogPage === totalCatalogPages}
+                  className="px-2.5 py-1.5 rounded-xl text-xs font-bold border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  title="Última página"
+                >
+                  »
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

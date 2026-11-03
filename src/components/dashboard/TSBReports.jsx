@@ -142,7 +142,7 @@ export default function TSBReports({ showToast }) {
           location: kardexFilters.location,
           product: kardexFilters.product,
           method: kardexFilters.method || 'GLOBAL_AVCO',
-          sort: kardexFilters.sort || 'desc'
+          sort: kardexFilters.sort || 'asc'
         });
         showToast('Kardex Excel generado y descargado correctamente', 'success');
       } else {

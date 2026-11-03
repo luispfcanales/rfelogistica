@@ -139,7 +139,31 @@ export function normalizeKardexPayload(payload) {
     const summary = raw.summary || {};
     const rows = Array.isArray(raw.rows) ? raw.rows : [];
 
-    // Normalize summary metrics
+    // Normalize summary metrics (match Go JSON tags in KardexSummary)
+    const ventasQty = summary.ventas_qty ?? summary.ventas_reales_qty ?? 0;
+    const ventasTotal = summary.ventas_total ?? summary.ventas_reales_tot ?? 0;
+    const consumoMermaQty = summary.consumo_merma_qty ?? 0;
+    const consumoMermaTotal = summary.consumo_merma_total ?? summary.consumo_merma_tot ?? 0;
+    const devProveedorQty = summary.dev_proveedor_qty ?? 0;
+    const devProveedorTotal = summary.dev_proveedor_total ?? summary.dev_proveedor_tot ?? 0;
+
+    // Sum all incoming and outgoing movements directly from rows (matching Excel export totals)
+    let rowsInQty = 0;
+    let rowsInTotal = 0;
+    let rowsOutQty = 0;
+    let rowsOutTotal = 0;
+    for (const r of rows) {
+      rowsInQty += r.in_qty || 0;
+      rowsInTotal += r.in_total || 0;
+      rowsOutQty += r.out_qty || 0;
+      rowsOutTotal += r.out_total || 0;
+    }
+
+    const summaryInQty = (summary.compras_qty || 0) + (summary.inv_inicial_qty || 0) + (summary.ajustes_pos_qty || 0) + (summary.dev_cliente_qty || 0) + (summary.transfer_in_qty || 0);
+    const summaryInTotal = (summary.compras_total || 0) + (summary.inv_inicial_total || 0) + (summary.ajustes_pos_total || 0) + (summary.dev_cliente_total || 0) + (summary.transfer_in_total || 0);
+    const summaryOutQty = ventasQty + consumoMermaQty + (summary.ajustes_neg_qty || 0) + devProveedorQty + (summary.transfer_out_qty || 0);
+    const summaryOutTotal = ventasTotal + consumoMermaTotal + (summary.ajustes_neg_total || 0) + devProveedorTotal + (summary.transfer_out_total || 0);
+
     const normSummary = {
       comprasQty: summary.compras_qty || 0,
       comprasTotal: summary.compras_total || 0,
@@ -149,14 +173,14 @@ export function normalizeKardexPayload(payload) {
       ajustesPosTotal: summary.ajustes_pos_total || 0,
       ajustesNegQty: summary.ajustes_neg_qty || 0,
       ajustesNegTotal: summary.ajustes_neg_total || 0,
-      ventasRealesQty: summary.ventas_reales_qty || 0,
-      ventasRealesTotal: summary.ventas_reales_tot || 0,
-      consumoMermaQty: summary.consumo_merma_qty || 0,
-      consumoMermaTotal: summary.consumo_merma_tot || 0,
+      ventasRealesQty: ventasQty,
+      ventasRealesTotal: ventasTotal,
+      consumoMermaQty: consumoMermaQty,
+      consumoMermaTotal: consumoMermaTotal,
       devClienteQty: summary.dev_cliente_qty || 0,
       devClienteTotal: summary.dev_cliente_total || 0,
-      devProveedorQty: summary.dev_proveedor_qty || 0,
-      devProveedorTotal: summary.dev_proveedor_tot || 0,
+      devProveedorQty: devProveedorQty,
+      devProveedorTotal: devProveedorTotal,
       transferInQty: summary.transfer_in_qty || 0,
       transferInTotal: summary.transfer_in_total || 0,
       transferOutQty: summary.transfer_out_qty || 0,
@@ -166,11 +190,11 @@ export function normalizeKardexPayload(payload) {
       finalBalanceTotal: summary.final_balance_total || 0,
       totalMovements: summary.total_movements || rows.length,
       hasNegative: Boolean(summary.has_negative),
-      // Aggregate totals for header cards
-      totInQty: (summary.compras_qty || 0) + (summary.inv_inicial_qty || 0) + (summary.ajustes_pos_qty || 0) + (summary.dev_cliente_qty || 0) + (summary.transfer_in_qty || 0),
-      totInTotal: (summary.compras_total || 0) + (summary.inv_inicial_total || 0) + (summary.ajustes_pos_total || 0) + (summary.dev_cliente_total || 0) + (summary.transfer_in_total || 0),
-      totOutQty: (summary.ventas_reales_qty || 0) + (summary.consumo_merma_qty || 0) + (summary.ajustes_neg_qty || 0) + (summary.dev_proveedor_qty || 0) + (summary.transfer_out_qty || 0),
-      totOutTotal: (summary.ventas_reales_tot || 0) + (summary.consumo_merma_tot || 0) + (summary.ajustes_neg_total || 0) + (summary.dev_proveedor_tot || 0) + (summary.transfer_out_total || 0),
+      // Aggregate totals for catalog & summary footer (all Entradas and all Salidas)
+      totInQty: rows.length > 0 ? rowsInQty : summaryInQty,
+      totInTotal: rows.length > 0 ? rowsInTotal : summaryInTotal,
+      totOutQty: rows.length > 0 ? rowsOutQty : summaryOutQty,
+      totOutTotal: rows.length > 0 ? rowsOutTotal : summaryOutTotal,
     };
 
     // Normalize rows
