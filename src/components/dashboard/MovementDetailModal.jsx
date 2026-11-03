@@ -50,7 +50,7 @@ export default function MovementDetailModal({ row, onClose }) {
                 )}
               </div>
               <h3 className="text-lg font-extrabold text-white mt-1.5 flex items-center font-mono tracking-tight">
-                {row.docName || row.series ? `${row.series}-${row.number}` : (row.reference || 'Movimiento de Almacén')}
+                {row.series && row.number ? `${row.series}-${row.number}` : (row.docName || row.reference || 'Movimiento de Almacén')}
               </h3>
             </div>
           </div>
