@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import * as XLSX from 'xlsx';
 import { fetchTSBKardex, downloadTSBKardexExcel } from '../../api/odoo';
 import { 
   normalizeKardexPayload, 
@@ -24,6 +25,9 @@ export default function TSBKardex({ selectedMonth = '', onFilterChange }) {
   const [exportingKardex, setExportingKardex] = useState(false);
   const [catalogPage, setCatalogPage] = useState(1);
   const [catalogPageSize, setCatalogPageSize] = useState(15);
+  const [catalogSort, setCatalogSort] = useState('name_asc');
+  const [movementsPage, setMovementsPage] = useState(1);
+  const [movementsPageSize, setMovementsPageSize] = useState(15);
 
   // Notify parent component of filter changes
   useEffect(() => {
@@ -86,20 +90,48 @@ export default function TSBKardex({ selectedMonth = '', onFilterChange }) {
     return normalizeKardexPayload(kardexData);
   }, [kardexData]);
 
-  // Search filter
+  // Search filter + Catalog Sort (Más Entradas, Más Salidas, etc.)
   const matchingProducts = useMemo(() => {
-    if (!productSearch.trim()) return productsList;
-    const query = productSearch.toLowerCase();
-    return productsList.filter(p => {
-      const pData = productsData[p];
-      return p.toLowerCase().includes(query) || (pData?.defaultCode && pData.defaultCode.toLowerCase().includes(query));
-    });
-  }, [productsList, productsData, productSearch]);
+    let filtered = productsList;
+    if (productSearch.trim()) {
+      const query = productSearch.toLowerCase();
+      filtered = productsList.filter(p => {
+        const pData = productsData[p];
+        return p.toLowerCase().includes(query) || (pData?.defaultCode && pData.defaultCode.toLowerCase().includes(query));
+      });
+    }
 
-  // Reset pagination when search, location, or month changes
+    const sorted = [...filtered];
+    sorted.sort((a, b) => {
+      const sumA = productsData[a]?.summary || {};
+      const sumB = productsData[b]?.summary || {};
+
+      if (catalogSort === 'more_in') {
+        const diff = (sumB.totInQty || 0) - (sumA.totInQty || 0);
+        if (Math.abs(diff) > 1e-9) return diff;
+      } else if (catalogSort === 'more_out') {
+        const diff = (sumB.totOutQty || 0) - (sumA.totOutQty || 0);
+        if (Math.abs(diff) > 1e-9) return diff;
+      } else if (catalogSort === 'more_stock') {
+        const diff = (sumB.finalBalanceQty || 0) - (sumA.finalBalanceQty || 0);
+        if (Math.abs(diff) > 1e-9) return diff;
+      } else if (catalogSort === 'more_value') {
+        const diff = (sumB.finalBalanceTotal || 0) - (sumA.finalBalanceTotal || 0);
+        if (Math.abs(diff) > 1e-9) return diff;
+      } else if (catalogSort === 'more_movements') {
+        const diff = (sumB.totalMovements || 0) - (sumA.totalMovements || 0);
+        if (diff !== 0) return diff;
+      }
+      return a.localeCompare(b);
+    });
+
+    return sorted;
+  }, [productsList, productsData, productSearch, catalogSort]);
+
+  // Reset pagination when search, location, month, or catalog sort changes
   useEffect(() => {
     setCatalogPage(1);
-  }, [productSearch, selectedLocation, selectedMonth]);
+  }, [productSearch, selectedLocation, selectedMonth, catalogSort]);
 
   const totalCatalogPages = Math.max(1, Math.ceil(matchingProducts.length / catalogPageSize));
   const currentCatalogPage = Math.min(catalogPage, totalCatalogPages);
@@ -110,6 +142,22 @@ export default function TSBKardex({ selectedMonth = '', onFilterChange }) {
   }, [matchingProducts, currentCatalogPage, catalogPageSize]);
 
   const activeProductData = selectedProduct ? productsData[selectedProduct] : null;
+  const showLocationColumn = ['ALL', 'BOUTIQUE', 'BAR', 'APA', 'ARA', 'TRC', 'PEM'].includes(selectedLocation);
+
+  // Reset movements pagination when product, location, month, or sort changes
+  useEffect(() => {
+    setMovementsPage(1);
+  }, [selectedProduct, selectedLocation, selectedMonth, sortDirection, costingMethod]);
+
+  const totalMovementRows = activeProductData?.rows?.length || 0;
+  const totalMovementsPages = Math.max(1, Math.ceil(totalMovementRows / movementsPageSize));
+  const currentMovementsPage = Math.min(movementsPage, totalMovementsPages);
+
+  const paginatedMovements = useMemo(() => {
+    if (!activeProductData?.rows) return [];
+    const startIdx = (currentMovementsPage - 1) * movementsPageSize;
+    return activeProductData.rows.slice(startIdx, startIdx + movementsPageSize);
+  }, [activeProductData, currentMovementsPage, movementsPageSize]);
 
   const handleSelectProduct = (pName) => {
     setSelectedProduct(pName);
@@ -119,6 +167,79 @@ export default function TSBKardex({ selectedMonth = '', onFilterChange }) {
   const handleClearSearch = () => {
     setProductSearch('');
     setSelectedProduct('');
+  };
+
+  // Export Catalog Table exactly as shown in the view
+  const handleExportCatalogExcel = () => {
+    if (matchingProducts.length === 0) return;
+
+    let totalMovs = 0;
+    let totalIn = 0;
+    let totalOut = 0;
+    let totalStock = 0;
+    let totalValue = 0;
+
+    const rowsForExcel = matchingProducts.map((pName) => {
+      const pData = productsData[pName] || {};
+      const summary = pData.summary || {};
+      const uom = pData.uomName || 'Units';
+
+      const movs = summary.totalMovements || 0;
+      const inQty = Number((summary.totInQty || 0).toFixed(2));
+      const outQty = Number((summary.totOutQty || 0).toFixed(2));
+      const stockFinal = Number((summary.finalBalanceQty || 0).toFixed(2));
+      const avco = Number((summary.finalBalanceCost || 0).toFixed(2));
+      const saldoTotal = Number((summary.finalBalanceTotal || 0).toFixed(2));
+
+      totalMovs += movs;
+      totalIn += inQty;
+      totalOut += outQty;
+      totalStock += stockFinal;
+      totalValue += saldoTotal;
+
+      return {
+        'PRODUCTO': pName,
+        'UDM': uom,
+        'MOVIMIENTOS': movs,
+        'ENTRADAS': inQty,
+        'SALIDAS': outQty,
+        'STOCK FINAL': stockFinal,
+        'AVCO (COSTO PROM)': avco,
+        'SALDO TOTAL (S/)': saldoTotal,
+      };
+    });
+
+    // Add summary row at the bottom
+    rowsForExcel.push({
+      'PRODUCTO': `TOTAL CATÁLOGO (${matchingProducts.length} PRODUCTOS)`,
+      'UDM': '',
+      'MOVIMIENTOS': totalMovs,
+      'ENTRADAS': Number(totalIn.toFixed(2)),
+      'SALIDAS': Number(totalOut.toFixed(2)),
+      'STOCK FINAL': Number(totalStock.toFixed(2)),
+      'AVCO (COSTO PROM)': '',
+      'SALDO TOTAL (S/)': Number(totalValue.toFixed(2)),
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rowsForExcel);
+    ws['!cols'] = [
+      { wch: 52 }, // PRODUCTO
+      { wch: 10 }, // UDM
+      { wch: 15 }, // MOVIMIENTOS
+      { wch: 15 }, // ENTRADAS
+      { wch: 15 }, // SALIDAS
+      { wch: 15 }, // STOCK FINAL
+      { wch: 18 }, // AVCO (COSTO PROM)
+      { wch: 18 }, // SALDO TOTAL (S/)
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Catálogo Kardex');
+
+    const locClean = (selectedLocation || 'CONSOLIDADO').replace(/[\s/]+/g, '_');
+    const periodClean = selectedMonth || 'HISTORICO';
+    const sortSuffix = catalogSort === 'more_in' ? '_MasEntradas' : catalogSort === 'more_out' ? '_MasSalidas' : '';
+    XLSX.writeFile(wb, `Catalogo_Kardex_${locClean}_${periodClean}${sortSuffix}.xlsx`);
   };
 
   return (
@@ -475,7 +596,7 @@ export default function TSBKardex({ selectedMonth = '', onFilterChange }) {
 
           {/* Detailed Movements Table */}
           <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm w-full">
-            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="font-extrabold text-slate-800 text-sm">
                   Movimientos Detallados ({activeProductData.rows.length} registros)
@@ -484,9 +605,28 @@ export default function TSBKardex({ selectedMonth = '', onFilterChange }) {
                   Cálculo continuo de saldos físicos y costo promedio ponderado (AVCO)
                 </p>
               </div>
-              <span className="text-xs font-mono font-bold text-slate-600 bg-white border border-slate-200 px-3 py-1 rounded-xl">
-                Base: {activeProductData.uomName}
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center space-x-1.5 bg-white border border-slate-200 rounded-xl px-2.5 py-1 text-xs">
+                  <span className="text-slate-500 font-semibold">Mostrar:</span>
+                  <select
+                    value={movementsPageSize}
+                    onChange={(e) => {
+                      setMovementsPageSize(Number(e.target.value));
+                      setMovementsPage(1);
+                    }}
+                    className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"
+                  >
+                    <option value={10}>10</option>
+                    <option value={15}>15</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+                <span className="text-xs font-mono font-bold text-slate-600 bg-white border border-slate-200 px-3 py-1 rounded-xl">
+                  Base: {activeProductData.uomName}
+                </span>
+              </div>
             </div>
 
             <div className="overflow-x-auto w-full">
@@ -494,7 +634,7 @@ export default function TSBKardex({ selectedMonth = '', onFilterChange }) {
                 <thead>
                   {/* Master Headers */}
                   <tr className="bg-slate-100 border-b border-slate-300 text-[11px] font-extrabold uppercase tracking-wider">
-                    <th colSpan={selectedLocation === 'ALL' ? "5" : "4"} className="px-3.5 py-3 border-r border-slate-300 text-center bg-slate-200/70 text-slate-800">
+                    <th colSpan={showLocationColumn ? "5" : "4"} className="px-3.5 py-3 border-r border-slate-300 text-center bg-slate-200/70 text-slate-800">
                       Comprobante de Pago
                     </th>
                     <th colSpan="4" className="px-3.5 py-3 border-r border-slate-300 text-center bg-slate-100 text-slate-800">
@@ -517,10 +657,10 @@ export default function TSBKardex({ selectedMonth = '', onFilterChange }) {
                     <th className="px-3 py-2.5 text-center">Tipo</th>
                     <th className="px-3 py-2.5">Serie</th>
                     <th className="px-3 py-2.5">Número</th>
-                    {selectedLocation === 'ALL' && (
+                    {showLocationColumn && (
                       <th className="px-3 py-2.5 border-r border-slate-300 text-blue-800">Ubicación</th>
                     )}
-                    <th className={`px-3 py-2.5 ${selectedLocation !== 'ALL' ? 'border-r border-slate-300' : ''}`}>Operación</th>
+                    <th className={`px-3 py-2.5 ${!showLocationColumn ? 'border-r border-slate-300' : ''}`}>Operación</th>
                     <th className="px-3 py-2.5">Doc. Almacén</th>
                     <th className="px-3 py-2.5">Cliente / Proveedor</th>
                     <th className="px-3 py-2.5 border-r border-slate-300">RUC / Doc</th>
@@ -540,7 +680,7 @@ export default function TSBKardex({ selectedMonth = '', onFilterChange }) {
                 </thead>
 
                 <tbody className="divide-y divide-slate-200 text-xs font-mono">
-                  {activeProductData.rows.map((row) => {
+                  {paginatedMovements.map((row) => {
                     const isIncoming = row.inQty > 0;
                     const isOutgoing = row.outQty > 0;
                     const isInitial = row.docType === 'Saldo Inicial del Periodo' || row.docType === 'Inventario Inicial';
@@ -571,7 +711,7 @@ export default function TSBKardex({ selectedMonth = '', onFilterChange }) {
                           {row.number || '-'}
                         </td>
 
-                        {selectedLocation === 'ALL' && (
+                        {showLocationColumn && (
                           <td className="px-3 py-2.5 text-blue-800 font-sans font-semibold border-r border-slate-200 whitespace-nowrap text-[11px]">
                             {getLocationLabel(row.location || row.toLocation || row.fromLocation)}
                           </td>
@@ -645,7 +785,7 @@ export default function TSBKardex({ selectedMonth = '', onFilterChange }) {
                 <tfoot>
                   <tr className="bg-slate-100 border-t-2 border-b-2 border-slate-400 text-xs font-mono font-extrabold text-slate-900">
                     <td
-                      colSpan={selectedLocation === 'ALL' ? 9 : 8}
+                      colSpan={showLocationColumn ? 9 : 8}
                       className="px-3.5 py-3 text-right font-sans font-extrabold uppercase tracking-wide text-slate-800 border-r border-slate-300 bg-slate-200/70"
                     >
                       TOTAL {activeProductData.productName.toUpperCase()} (UdM: {activeProductData.uomName}):
@@ -689,6 +829,65 @@ export default function TSBKardex({ selectedMonth = '', onFilterChange }) {
                 </tfoot>
               </table>
             </div>
+
+            {/* Pagination Footer for Detailed Movements */}
+            {totalMovementRows > 0 && (
+              <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="text-xs text-slate-600 font-medium">
+                  Mostrando{' '}
+                  <span className="font-bold text-slate-900">
+                    {(currentMovementsPage - 1) * movementsPageSize + 1}
+                  </span>{' '}
+                  a{' '}
+                  <span className="font-bold text-slate-900">
+                    {Math.min(currentMovementsPage * movementsPageSize, totalMovementRows)}
+                  </span>{' '}
+                  de{' '}
+                  <span className="font-bold text-slate-900">
+                    {totalMovementRows}
+                  </span>{' '}
+                  registros
+                </div>
+
+                <div className="flex items-center space-x-1.5">
+                  <button
+                    onClick={() => setMovementsPage(1)}
+                    disabled={currentMovementsPage === 1}
+                    className="px-2.5 py-1.5 rounded-xl text-xs font-bold border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                    title="Primera página"
+                  >
+                    «
+                  </button>
+                  <button
+                    onClick={() => setMovementsPage((p) => Math.max(1, p - 1))}
+                    disabled={currentMovementsPage === 1}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  >
+                    Anterior
+                  </button>
+
+                  <span className="px-3 py-1.5 rounded-xl text-xs font-mono font-bold bg-blue-600 text-white shadow-sm">
+                    Página {currentMovementsPage} de {totalMovementsPages}
+                  </span>
+
+                  <button
+                    onClick={() => setMovementsPage((p) => Math.min(totalMovementsPages, p + 1))}
+                    disabled={currentMovementsPage === totalMovementsPages}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  >
+                    Siguiente
+                  </button>
+                  <button
+                    onClick={() => setMovementsPage(totalMovementsPages)}
+                    disabled={currentMovementsPage === totalMovementsPages}
+                    className="px-2.5 py-1.5 rounded-xl text-xs font-bold border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                    title="Última página"
+                  >
+                    »
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
         </div>
@@ -705,7 +904,25 @@ export default function TSBKardex({ selectedMonth = '', onFilterChange }) {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs">
+              {/* Sort Selector for Catalog */}
+              <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs">
+                <span className="text-slate-500 font-semibold">Ordenar por:</span>
+                <select
+                  value={catalogSort}
+                  onChange={(e) => setCatalogSort(e.target.value)}
+                  className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"
+                >
+                  <option value="name_asc">Producto (A - Z)</option>
+                  <option value="more_in">Más Entradas (Mayor a menor)</option>
+                  <option value="more_out">Más Salidas (Mayor a menor)</option>
+                  <option value="more_stock">Mayor Stock Final</option>
+                  <option value="more_value">Mayor Saldo Total (S/)</option>
+                  <option value="more_movements">Más Movimientos</option>
+                </select>
+              </div>
+
+              {/* Page Size Selector */}
+              <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs">
                 <span className="text-slate-500 font-semibold">Mostrar:</span>
                 <select
                   value={catalogPageSize}
@@ -722,9 +939,23 @@ export default function TSBKardex({ selectedMonth = '', onFilterChange }) {
                   <option value={100}>100</option>
                 </select>
               </div>
+
               <span className="text-xs font-mono font-bold bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-xl">
                 {matchingProducts.length} productos
               </span>
+
+              {/* Export Catalog View Button */}
+              <button
+                onClick={handleExportCatalogExcel}
+                disabled={matchingProducts.length === 0}
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-3.5 py-1.5 rounded-xl transition-all text-xs font-bold flex items-center shadow-sm active:scale-95 cursor-pointer"
+                title="Descargar esta tabla resumen de productos en Excel tal como se muestra"
+              >
+                <svg className="w-3.5 h-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Descargar Catálogo Excel
+              </button>
             </div>
           </div>
 

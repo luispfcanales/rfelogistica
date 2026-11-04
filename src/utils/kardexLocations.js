@@ -2,6 +2,8 @@
 
 export const COMMERCIAL_POINTS = [
   { value: 'ALL', label: '★ CONSOLIDADO GENERAL (Todas las Ubicaciones)' },
+  { value: 'BOUTIQUE', label: 'Solo Boutique (Todos los Puntos: APA + ARA + TRC)' },
+  { value: 'BAR', label: 'Solo Bar (Todos los Puntos: APA + ARA + TRC)' },
   { value: 'APA', label: 'Punto Comercial APA (Bar + Boutique)' },
   { value: 'ARA', label: 'Punto Comercial ARA (Bar + Boutique)' },
   { value: 'TRC', label: 'Punto Comercial TRC (Bar + Boutique)' },
@@ -28,6 +30,8 @@ export const LOCATION_GROUPS = [
   {
     group: 'Puntos Comerciales',
     options: [
+      { value: 'BOUTIQUE', label: 'Solo Boutique (Todos los Puntos)' },
+      { value: 'BAR', label: 'Solo Bar (Todos los Puntos)' },
       { value: 'APA', label: 'Posada Amazonas (APA)' },
       { value: 'ARA', label: 'Refugio Amazonas (ARA)' },
       { value: 'TRC', label: 'Tambopata Research Center (TRC)' },

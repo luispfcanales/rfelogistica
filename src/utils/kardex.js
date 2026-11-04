@@ -242,6 +242,7 @@ export function normalizeKardexPayload(payload) {
       productType: raw.product_type || 'product',
       isActive: raw.is_active !== undefined ? raw.is_active : true,
       uomName: raw.uom_name || 'Unidad',
+      categoryName: raw.category_name || '',
       summary: normSummary,
       rows: normRows
     };
